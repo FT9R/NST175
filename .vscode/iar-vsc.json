@@ -1,0 +1,18 @@
+{
+  "workspace": {
+    "path": "${workspaceFolder}\\platform\\stm32\\EWARM\\Project.eww"
+  },
+  "workbench": {
+    "path": "C:\\iar\\ewarm-9.60.3"
+  },
+  "workspaces": {
+    "${workspaceFolder}\\platform\\stm32\\EWARM\\Project.eww": {
+      "configs": {
+        "${workspaceFolder}\\platform\\stm32\\EWARM\\NST175.ewp": "NST175"
+      },
+      "selected": {
+        "path": "${workspaceFolder}\\platform\\stm32\\EWARM\\NST175.ewp"
+      }
+    }
+  }
+}
