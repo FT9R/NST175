@@ -9,6 +9,7 @@
 #define I2C_READ_TIMEOUT  1000
 #define I2C_WRITE_TIMEOUT 1000
 #define ONE_SHOT_TIMEOUT  100
+static const uint8_t faultQueueLut[] = {1, 2, 4, 6};
 
 /* Macro */
 #define READ_REG(REG, DATA, SIZE, ...)                                                                     \
@@ -218,7 +219,6 @@ void NST175_LimitSet(nst175_t *dev, nst175_limit_t limitType, float limit)
 void NST175_FaultQueueGet(nst175_t *dev, uint8_t *faultQueue)
 {
     uint8_t config;
-    static const uint8_t faultQueueLut[] = {1, 2, 4, 6};
 
     if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
