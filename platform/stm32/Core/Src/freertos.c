@@ -133,10 +133,24 @@ void I2C_Task(void *argument)
 {
     /* USER CODE BEGIN I2C_Task */
     static nst175_t tempSensor;
+    static float tempFiltered;
+    float temp;
+    const float alphaTemp = 0.05;
+
     NST175_SetUp(&tempSensor);
     /* Infinite loop */
     for (;;)
-        osDelay(1);
+    {
+        NST175_TemperatureGet(&tempSensor, &temp);
+        tempFiltered = alphaTemp * temp + (1 - alphaTemp) * tempFiltered;
+        osMessageQueuePut(tempQueueHandle, &tempFiltered, 0, 0);
+
+        /* - In continuous-conversion (default) mode wait between samples.
+         * - In shutdown (low power) mode, one-shot measurement is triggered and sample ready flag is automatically
+         * checked with `dev.oneshotTimeout` */
+        if (!tempSensor.cache.shutdown)
+            osDelay(NST175_CONVERSION_TIME);
+    }
     /* USER CODE END I2C_Task */
 }
 
@@ -150,6 +164,7 @@ void I2C_Task(void *argument)
 void LED_Task(void *argument)
 {
     /* USER CODE BEGIN LED_Task */
+    float temperatureReadings;
     /* Startup traffic light */
     for (uint8_t i = 0; i < 5; i++)
     {
@@ -158,7 +173,15 @@ void LED_Task(void *argument)
     }
     /* Infinite loop */
     for (;;)
-        osDelay(1);
+    {
+        osMessageQueueGet(tempQueueHandle, &temperatureReadings, NULL, osWaitForever);
+        if (temperatureReadings > 80)
+            LEDR_ON, LEDY_OFF, LEDG_OFF;
+        else if (temperatureReadings > 40)
+            LEDR_OFF, LEDY_ON, LEDG_OFF;
+        else
+            LEDR_OFF, LEDY_OFF, LEDG_ON;
+    }
     /* USER CODE END LED_Task */
 }
 

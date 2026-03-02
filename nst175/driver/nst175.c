@@ -3,50 +3,49 @@
 #include <string.h>
 
 /* Constants */
+#define HANDLE_IDENTITY   (uint32_t) 0x17A65F03
 #define DEVICE_ADDRESS    (uint8_t) 0b0110111
 #define DEVICE_ID         (uint8_t) 0x0A
 #define I2C_READ_TIMEOUT  1000
 #define I2C_WRITE_TIMEOUT 1000
-#define ONE_SHOT_TIMEOUT  1000
+#define ONE_SHOT_TIMEOUT  100
 
 /* Macro */
-#define __FILENAME__                                       \
-    (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 \
-                             : (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
-#define READ_REG(REG, DATA, SIZE, ...)                                                                   \
-    do                                                                                                   \
-    {                                                                                                    \
-        if (!dev->interface.read(dev->interface.handle, dev->address, (REG), (uint8_t *) (DATA), (SIZE), \
-                                 I2C_READ_TIMEOUT))                                                      \
-            ERROR_SET(NST175_ERR_I2C_READ, __VA_ARGS__);                                                 \
-    }                                                                                                    \
+#define READ_REG(REG, DATA, SIZE, ...)                                                                     \
+    do                                                                                                     \
+    {                                                                                                      \
+        if (!dev->interface.read(dev->interface.handle, dev->address, (uint8_t) (REG), (uint8_t *) (DATA), \
+                                 (uint8_t) (SIZE), I2C_READ_TIMEOUT))                                      \
+            ERROR_SET(NST175_ERR_I2C_READ, __VA_ARGS__);                                                   \
+    }                                                                                                      \
     while (0)
 
-#define WRITE_REG(REG, DATA, SIZE, ...)                                                                      \
-    do                                                                                                       \
-    {                                                                                                        \
-        if ((SIZE) == 0 || (SIZE) > 4)                                                                       \
-            ERROR_SET(NST175_ERR_INTERNAL, __VA_ARGS__);                                                     \
-        uint8_t writeBuf[4] = {0};                                                                           \
-        uint32_t data = (uint32_t) (DATA);                                                                   \
-        writeBuf[0] = (uint8_t) (data >> 24);                                                                \
-        writeBuf[1] = (uint8_t) (data >> 16);                                                                \
-        writeBuf[2] = (uint8_t) (data >> 8);                                                                 \
-        writeBuf[3] = (uint8_t) (data);                                                                      \
-        if (!dev->interface.write(dev->interface.handle, dev->address, (REG), &writeBuf[4 - (SIZE)], (SIZE), \
-                                  I2C_WRITE_TIMEOUT))                                                        \
-            ERROR_SET(NST175_ERR_I2C_WRITE, __VA_ARGS__);                                                    \
-    }                                                                                                        \
+#define WRITE_REG(REG, DATA, SIZE, ...)                                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        uint8_t _writeBuf[4];                                                                                          \
+        uint8_t _size = (uint8_t) (SIZE);                                                                              \
+        uint32_t _data = (uint32_t) (DATA);                                                                            \
+        if ((_size == 0u) || (_size > 4u))                                                                             \
+            ERROR_SET(NST175_ERR_INTERNAL, __VA_ARGS__);                                                               \
+        _writeBuf[0] = (uint8_t) (_data >> 24);                                                                        \
+        _writeBuf[1] = (uint8_t) (_data >> 16);                                                                        \
+        _writeBuf[2] = (uint8_t) (_data >> 8);                                                                         \
+        _writeBuf[3] = (uint8_t) (_data);                                                                              \
+        if (!dev->interface.write(dev->interface.handle, dev->address, (uint8_t) (REG), &_writeBuf[4u - _size], _size, \
+                                  I2C_WRITE_TIMEOUT))                                                                  \
+            ERROR_SET(NST175_ERR_I2C_WRITE, __VA_ARGS__);                                                              \
+    }                                                                                                                  \
     while (0)
 
-#define ERROR_SET(ERR, ...)                                              \
-    do                                                                   \
-    {                                                                    \
-        dev->error |= (ERR);                                             \
-        if (dev->callbacks.error != NULL)                                \
-            dev->callbacks.error(dev, __FILENAME__, __func__, __LINE__); \
-        return __VA_ARGS__;                                              \
-    }                                                                    \
+#define ERROR_SET(ERR, ...)                      \
+    do                                           \
+    {                                            \
+        dev->error |= (ERR);                     \
+        if (dev->callbacks.error != NULL)        \
+            dev->callbacks.error(dev, __func__); \
+        return __VA_ARGS__;                      \
+    }                                            \
     while (0)
 
 /* Custom types */
@@ -70,6 +69,7 @@ typedef enum {
 void NST175_Init(nst175_t *dev)
 {
     uint8_t id;
+    uint8_t config;
     uint8_t responseAttempt = 0;
 
     if (dev == NULL)
@@ -84,7 +84,8 @@ void NST175_Init(nst175_t *dev)
     dev->oneshotTimeout = (dev->oneshotTimeout == 0) ? ONE_SHOT_TIMEOUT : dev->oneshotTimeout;
 
     /* Clear cached values and errors */
-    memset(&dev->resolution, 0, sizeof(*dev) - offsetof(nst175_t, resolution));
+    memset(&dev->cache, 0, sizeof(dev->cache));
+    dev->error = NST175_ERR_NONE;
 
     /* Device ID check */
     while (true)
@@ -101,27 +102,19 @@ void NST175_Init(nst175_t *dev)
             ERROR_SET(NST175_ERR_ID);
     }
 
-    NST175_ShutdownModeGet(dev);
-    NST175_ResolutionGet(dev);
-}
-
-void NST175_ShutdownModeGet(nst175_t *dev)
-{
-    uint8_t config;
-
-    if (dev == NULL)
-        return;
-
-    /* Update shutdown mode in device handle */
+    /* Update resolution, lsb weight and shutdown mode in device handle */
     READ_REG(REG_CONFIGURATION, &config, 1);
-    dev->shutdown = (config & CONFIG_MASK_SHUTDOWN) ? true : false;
+    dev->cache.resolution = ((config & CONFIG_MASK_RESOLUTION) >> 5) + 9;
+    dev->cache.lsb = 1.0f / (1 << (dev->cache.resolution - 8));
+    dev->cache.shutdown = (config & CONFIG_MASK_SHUTDOWN) ? true : false;
+    dev->cache.identity = HANDLE_IDENTITY;
 }
 
 void NST175_ShutdownModeSet(nst175_t *dev, bool enabled)
 {
     uint8_t config;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
 
     /* Write new shutdown mode to device */
@@ -130,40 +123,28 @@ void NST175_ShutdownModeSet(nst175_t *dev, bool enabled)
     WRITE_REG(REG_CONFIGURATION, config, 1);
 
     /* Update shutdown mode in device handle */
-    NST175_ShutdownModeGet(dev);
-}
-
-void NST175_ResolutionGet(nst175_t *dev)
-{
-    uint8_t config;
-
-    if (dev == NULL)
-        return;
-
-    /* Update resolution in device handle */
     READ_REG(REG_CONFIGURATION, &config, 1);
-    dev->resolution = ((config & CONFIG_MASK_RESOLUTION) >> 5) + 9;
-
-    /* Update LSB weight in device handle */
-    dev->lsb = 1.0f / (1 << (dev->resolution - 8));
+    dev->cache.shutdown = (config & CONFIG_MASK_SHUTDOWN) ? true : false;
 }
 
 void NST175_ResolutionSet(nst175_t *dev, uint8_t resolution)
 {
     uint8_t config;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
     if (resolution < 9 || resolution > 12)
         ERROR_SET(NST175_ERR_ARG);
 
     /* Write new resolution to device */
     READ_REG(REG_CONFIGURATION, &config, 1);
-    config = (config & ~CONFIG_MASK_RESOLUTION) | ((resolution - 9) << 5);
+    config = (uint8_t) (config & ~CONFIG_MASK_RESOLUTION) | ((resolution - 9) << 5);
     WRITE_REG(REG_CONFIGURATION, config, 1);
 
-    /* Update resolution in device handle */
-    NST175_ResolutionGet(dev);
+    /* Update resolution and lsb weight in device handle */
+    READ_REG(REG_CONFIGURATION, &config, 1);
+    dev->cache.resolution = ((config & CONFIG_MASK_RESOLUTION) >> 5) + 9;
+    dev->cache.lsb = 1.0f / (1 << (dev->cache.resolution - 8));
 }
 
 void NST175_LimitGet(nst175_t *dev, nst175_limit_t limitType, float *limit)
@@ -172,7 +153,7 @@ void NST175_LimitGet(nst175_t *dev, nst175_limit_t limitType, float *limit)
     int16_t raw;
     regAddr_t reg;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
     if (limit == NULL)
         ERROR_SET(NST175_ERR_ARG);
@@ -194,7 +175,7 @@ void NST175_LimitGet(nst175_t *dev, nst175_limit_t limitType, float *limit)
     READ_REG(reg, buf, sizeof(buf));
 
     /* Assemble MSB-first */
-    raw = (int16_t) ((buf[0] << 8) | buf[1]);
+    raw = (int16_t) (((uint16_t) buf[0] << 8) | buf[1]);
 
     /* Shift right to remove unused bits */
     raw >>= (16 - 12);
@@ -208,7 +189,7 @@ void NST175_LimitSet(nst175_t *dev, nst175_limit_t limitType, float limit)
     int16_t raw;
     regAddr_t reg;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
 
     /* Select register based on limit type */
@@ -239,7 +220,7 @@ void NST175_FaultQueueGet(nst175_t *dev, uint8_t *faultQueue)
     uint8_t config;
     static const uint8_t faultQueueLut[] = {1, 2, 4, 6};
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
     if (faultQueue == NULL)
         ERROR_SET(NST175_ERR_ARG);
@@ -254,7 +235,7 @@ void NST175_FaultQueueSet(nst175_t *dev, uint8_t faultQueue)
     uint8_t config;
     uint8_t encoded;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
 
     switch (faultQueue)
@@ -277,7 +258,7 @@ void NST175_FaultQueueSet(nst175_t *dev, uint8_t faultQueue)
 
     /* Write new fault queue setting to device */
     READ_REG(REG_CONFIGURATION, &config, 1);
-    config = (config & ~CONFIG_MASK_FAULT_QUEUE) | (encoded << 3);
+    config = (uint8_t) (config & ~CONFIG_MASK_FAULT_QUEUE) | (encoded << 3);
     WRITE_REG(REG_CONFIGURATION, config, 1);
 }
 
@@ -285,7 +266,7 @@ void NST175_ThermostatModeGet(nst175_t *dev, nst175_thermostat_mode_t *mode)
 {
     uint8_t config;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
     if (mode == NULL)
         ERROR_SET(NST175_ERR_ARG);
@@ -299,12 +280,12 @@ void NST175_ThermostatModeSet(nst175_t *dev, nst175_thermostat_mode_t mode)
 {
     uint8_t config;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
 
     /* Write new thermostat mode setting to device */
     READ_REG(REG_CONFIGURATION, &config, 1);
-    config = (config & ~CONFIG_MASK_MODE) | ((mode == NST175_THERMOSTAT_MODE_IT) << 1);
+    config = (uint8_t) (config & ~CONFIG_MASK_MODE) | ((mode == NST175_THERMOSTAT_MODE_IT) << 1);
     WRITE_REG(REG_CONFIGURATION, config, 1);
 }
 
@@ -312,7 +293,7 @@ void NST175_PolarityGet(nst175_t *dev, nst175_alarm_polarity_t *polarity)
 {
     uint8_t config;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
     if (polarity == NULL)
         ERROR_SET(NST175_ERR_ARG);
@@ -326,12 +307,12 @@ void NST175_PolaritySet(nst175_t *dev, nst175_alarm_polarity_t polarity)
 {
     uint8_t config;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
 
     /* Write new alarm pin polarity setting to device */
     READ_REG(REG_CONFIGURATION, &config, 1);
-    config = (config & ~CONFIG_MASK_ALERT_POL) | ((polarity == NST175_ALARM_POLARITY_HIGH) << 2);
+    config = (uint8_t) (config & ~CONFIG_MASK_ALERT_POL) | ((polarity == NST175_ALARM_POLARITY_HIGH) << 2);
     WRITE_REG(REG_CONFIGURATION, config, 1);
 }
 
@@ -342,13 +323,13 @@ void NST175_TemperatureGet(nst175_t *dev, float *temperature)
     uint8_t buf[2];
     int16_t raw;
 
-    if (dev == NULL)
+    if (dev == NULL || dev->cache.identity != HANDLE_IDENTITY)
         return;
     if (temperature == NULL)
         ERROR_SET(NST175_ERR_ARG);
 
     /* Generate one-shot measurement request if device is in shutdown mode */
-    if (dev->shutdown)
+    if (dev->cache.shutdown)
     {
         /* Start one-shot measurement */
         READ_REG(REG_CONFIGURATION, &config, 1);
@@ -374,11 +355,11 @@ void NST175_TemperatureGet(nst175_t *dev, float *temperature)
     READ_REG(REG_TEMPERATURE, buf, sizeof(buf));
 
     /* Assemble MSB-first */
-    raw = (int16_t) ((buf[0] << 8) | buf[1]);
+    raw = (int16_t) (((uint16_t) buf[0] << 8) | buf[1]);
 
     /* Shift right to remove unused bits */
-    raw >>= (16 - dev->resolution);
+    raw >>= (16 - dev->cache.resolution);
 
     /* Convert raw value to temperature */
-    *temperature = raw * dev->lsb;
+    *temperature = raw * dev->cache.lsb;
 }

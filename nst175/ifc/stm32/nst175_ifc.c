@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+__root __IO GPIO_TypeDef *gpiob = GPIOB;
+
 static bool NST175_Read(void *handle, uint16_t address, uint16_t reg, uint8_t *data, uint16_t size, uint32_t timeout)
 {
     if (handle == NULL || data == NULL || size == 0)
@@ -25,18 +27,15 @@ static void NST175_Delay(uint32_t ms)
     osDelay(ms);
 }
 
-static void NST175_ErrorHandler(nst175_t *dev, const char *file, const char *func, int line)
+static void NST175_ErrorHandler(nst175_t *dev, const char *func)
 {
 #ifndef NDEBUG
-    printf("Error 0x%08X at %s:%s():%d\n", (dev->error), file, func, line);
+    printf("%s(): error 0x%08X\n", func, dev->error);
 #endif
     osDelay(1000);
     HAL_I2C_DeInit(&hi2c1);
     MX_I2C1_Init();
-    dev->error = NST175_ERR_NONE;
 }
-
-__root __IO GPIO_TypeDef *gpiob = GPIOB;
 
 void NST175_SetUp(nst175_t *dev)
 {
@@ -49,20 +48,11 @@ void NST175_SetUp(nst175_t *dev)
     dev->callbacks.error = NST175_ErrorHandler;
     dev->address = 0b1001111;
     NST175_Init(dev);
-    NST175_FaultQueueSet(dev, 6);
+
     NST175_ResolutionSet(dev, 12);
-    NST175_ShutdownModeSet(dev, true);
-
-    float limit = 0;
-    NST175_LimitSet(dev, NST175_LIMIT_LOW, 20.625f);
+    NST175_LimitSet(dev, NST175_LIMIT_LOW, 50.0f);
     NST175_LimitSet(dev, NST175_LIMIT_HIGH, 63.1875f);
-    NST175_LimitGet(dev, NST175_LIMIT_LOW, &limit);
-    NST175_LimitGet(dev, NST175_LIMIT_HIGH, &limit);
-
-    static float temp = 0;
-    while (true)
-    {
-        // osDelay(123);
-        NST175_TemperatureGet(dev, &temp);
-    }
+    NST175_FaultQueueSet(dev, 6);
+    if (dev->error != NST175_ERR_NONE)
+        Error_Handler();
 }
