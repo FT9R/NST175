@@ -43,7 +43,7 @@ void NST175_SetUp(nst175_t *dev)
 }
 ```
 
-Read temperature
+- Read temperature
 ```C
 void Task_ReadTemperature(void)
 {
