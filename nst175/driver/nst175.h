@@ -49,6 +49,10 @@ typedef struct nst175_s {
     nst175_error_t error; // Accumulated driver errors
 } nst175_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Initialize the NST175 device
  * @param dev pointer to the device structure
@@ -143,3 +147,7 @@ void NST175_PolaritySet(nst175_t *dev, nst175_alarm_polarity_t polarity);
  * `dev.oneshotTimeout`
  */
 void NST175_TemperatureGet(nst175_t *dev, float *temperature);
+
+#ifdef __cplusplus
+}
+#endif
