@@ -26,6 +26,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "nst175_ifc.h"
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -136,6 +139,7 @@ void I2C_Task(void *argument)
     static float tempFiltered;
     float temp;
     const float alphaTemp = 0.05;
+    char plotString[50] = {0};
 
     NST175_SetUp(&tempSensor);
     /* Infinite loop */
@@ -144,6 +148,11 @@ void I2C_Task(void *argument)
         NST175_TemperatureGet(&tempSensor, &temp);
         tempFiltered = alphaTemp * temp + (1 - alphaTemp) * tempFiltered;
         osMessageQueuePut(tempQueueHandle, &tempFiltered, 0, 0);
+
+        /* Plot measured values */
+        printf("Temperature: %.2f °C\n", (double) tempFiltered);
+        snprintf(plotString, sizeof(plotString), "%.2f\n", (double) tempFiltered);
+        HAL_UART_Transmit(&huart4, (const uint8_t *) plotString, strnlen(plotString, sizeof(plotString)), 1000);
 
         /* - In continuous-conversion (default) mode wait between samples.
          * - In shutdown (low power) mode, one-shot measurement is triggered and sample ready flag is automatically
