@@ -1,5 +1,4 @@
 #include "nst175.h"
-#include <stddef.h>
 #include <string.h>
 
 /* Constants */
