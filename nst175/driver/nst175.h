@@ -31,8 +31,8 @@ typedef struct nst175_s {
     } interface;
 
     struct {
-        void (*error)(struct nst175_s *dev,
-                      const char *func); // Optional error callback, to be invoked on any driver error occurrence
+        void (*error)(struct nst175_s *dev, nst175_error_t error,
+                      const char *funcName); // Optional error callback, to be invoked on any driver error occurrence
     } callbacks;
 
     /* Per-device driver internals - do not modify */

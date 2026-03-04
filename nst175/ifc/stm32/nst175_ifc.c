@@ -27,10 +27,11 @@ static void NST175_Delay(uint32_t ms)
     osDelay(ms);
 }
 
-static void NST175_ErrorHandler(nst175_t *dev, const char *func)
+static void NST175_ErrorHandler(nst175_t *dev, nst175_error_t error, const char *funcName)
 {
+    UNUSED(dev);
 #ifndef NDEBUG
-    printf("%s(): error 0x%08X\n", func, dev->error);
+    printf("%s(): error 0x%08X\n", funcName, error);
 #endif
     osDelay(1000);
     HAL_I2C_DeInit(&hi2c1);

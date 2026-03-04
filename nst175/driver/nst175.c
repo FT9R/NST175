@@ -39,14 +39,15 @@ static const uint8_t faultQueueLut[] = {1, 2, 4, 6};
     }                                                                                                                  \
     while (0)
 
-#define ERROR_SET(ERR, ...)                      \
-    do                                           \
-    {                                            \
-        dev->error |= (ERR);                     \
-        if (dev->callbacks.error != NULL)        \
-            dev->callbacks.error(dev, __func__); \
-        return __VA_ARGS__;                      \
-    }                                            \
+#define ERROR_SET(ERR, ...)                           \
+    do                                                \
+    {                                                 \
+        nst175_error_t err = (ERR);                   \
+        dev->error |= err;                            \
+        if (dev->callbacks.error != NULL)             \
+            dev->callbacks.error(dev, err, __func__); \
+        return __VA_ARGS__;                           \
+    }                                                 \
     while (0)
 
 /* Custom types */
