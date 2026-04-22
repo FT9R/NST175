@@ -1,6 +1,7 @@
 #include "nst175_ifc.h"
 #include "cmsis_os.h"
 #include "i2c.h"
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -27,15 +28,13 @@ static void NST175_Delay(uint32_t ms)
     osDelay(ms);
 }
 
-static void NST175_ErrorHandler(nst175_t *dev, nst175_error_t error, const char *funcName)
+static void NST175_Print(const char *const fmt, ...)
 {
-    UNUSED(dev);
-#ifndef NDEBUG
-    printf("%s(): error 0x%08X\n", funcName, error);
-#endif
-    osDelay(1000);
-    HAL_I2C_DeInit(&hi2c1);
-    MX_I2C1_Init();
+    va_list args;
+
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
 }
 
 void NST175_SetUp(nst175_t *dev)
@@ -46,14 +45,12 @@ void NST175_SetUp(nst175_t *dev)
     dev->interface.read = NST175_Read;
     dev->interface.write = NST175_Write;
     dev->interface.delay = NST175_Delay;
-    dev->callbacks.error = NST175_ErrorHandler;
-    dev->address = 0b1001111;
-    NST175_Init(dev);
+    dev->interface.print = NST175_Print;
+    if (NST175_Init(dev, 0b1001111) != NST175_STAT_OK)
+        Error_Handler();
 
     NST175_ResolutionSet(dev, 12);
     NST175_LimitSet(dev, NST175_LIMIT_LOW, 50.0f);
     NST175_LimitSet(dev, NST175_LIMIT_HIGH, 63.1875f);
     NST175_FaultQueueSet(dev, 6);
-    if (dev->error != NST175_ERR_NONE)
-        Error_Handler();
 }

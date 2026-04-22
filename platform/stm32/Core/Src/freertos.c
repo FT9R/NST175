@@ -137,28 +137,26 @@ void I2C_Task(void *argument)
     /* USER CODE BEGIN I2C_Task */
     static nst175_t tempSensor;
     static float tempFiltered;
-    float temp;
+    float temp = 0;
     const float alphaTemp = 0.05;
     char plotString[50] = {0};
 
     NST175_SetUp(&tempSensor);
     /* Infinite loop */
-    for (;;)
-    {
-        NST175_TemperatureGet(&tempSensor, &temp);
+    for (;;) {
+        NST175_TemperatureGet(&tempSensor, &temp, 0);
         tempFiltered = alphaTemp * temp + (1 - alphaTemp) * tempFiltered;
         osMessageQueuePut(tempQueueHandle, &tempFiltered, 0, 0);
 
         /* Plot measured values */
-        printf("Temperature: %.2f °C\n", (double) tempFiltered);
         snprintf(plotString, sizeof(plotString), "%.2f\n", (double) tempFiltered);
         HAL_UART_Transmit(&huart4, (const uint8_t *) plotString, strnlen(plotString, sizeof(plotString)), 1000);
 
         /* - In continuous-conversion (default) mode wait between samples.
-         * - In shutdown (low power) mode, one-shot measurement is triggered and sample ready flag is automatically
-         * checked with `dev.oneshotTimeout` */
-        if (!tempSensor.cache.shutdown)
-            osDelay(NST175_CONVERSION_TIME);
+         * - In shutdown (low power) mode, one-shot measurement is automatically triggered and sample ready flag is
+         * checked within `NST175_TemperatureGet()` applying timeout provided in args
+         */
+        osDelay(NST175_CONVERSION_TIME);
     }
     /* USER CODE END I2C_Task */
 }
@@ -175,14 +173,12 @@ void LED_Task(void *argument)
     /* USER CODE BEGIN LED_Task */
     float temperatureReadings;
     /* Startup traffic light */
-    for (uint8_t i = 0; i < 5; i++)
-    {
+    for (uint8_t i = 0; i < 5; i++) {
         LEDR_ON, LEDY_ON, LEDG_ON, osDelay(100);
         LEDR_OFF, LEDY_OFF, LEDG_OFF, osDelay(100);
     }
     /* Infinite loop */
-    for (;;)
-    {
+    for (;;) {
         osMessageQueueGet(tempQueueHandle, &temperatureReadings, NULL, osWaitForever);
         if (temperatureReadings > 80)
             LEDR_ON, LEDY_OFF, LEDG_OFF;
