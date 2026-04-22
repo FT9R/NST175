@@ -15,7 +15,7 @@
     }                                                              \
     while (0)
 
-#define READ_REG(REG, DATA, SIZE, ...)                                                                           \
+#define READ_REG(REG, DATA, SIZE)                                                                                \
     do {                                                                                                         \
         if (!dev->interface.read(dev->interface.handle, dev->cache.address, (uint8_t) (REG), (uint8_t *) (DATA), \
                                  (uint8_t) (SIZE), I2C_READ_TIMEOUT))                                            \
@@ -23,7 +23,7 @@
     }                                                                                                            \
     while (0)
 
-#define WRITE_REG(REG, DATA, SIZE, ...)                                                                               \
+#define WRITE_REG(REG, DATA, SIZE)                                                                                    \
     do {                                                                                                              \
         uint8_t _writeBuf[4];                                                                                         \
         uint8_t _size = (uint8_t) (SIZE);                                                                             \
