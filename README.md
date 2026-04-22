@@ -34,7 +34,7 @@ void NST175_SetUp(nst175_t *dev)
     dev->interface.write = NST175_Write;
     dev->interface.delay = NST175_Delay;
     dev->interface.print = NST175_Print;
-    if (NST175_Init(dev, 0b1001111) != NST175_STAT_OK)
+    if (NST175_Init(dev, 0b1001111, true) != NST175_STAT_OK)
         Error_Handler();
 
     /* Overwrite defaults if needed */

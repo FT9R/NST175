@@ -46,14 +46,15 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize the NST175 device
+ * @brief Initialize/Renitialize the NST175 device
  * @param dev pointer to the device structure
  * @param address 7bit device I2C slave address from datasheet
+ * @param reset reset configuration registers to default power-up state
  * @return Exit driver status
  * @note Interface read/write/delay function pointers have to be provided prior `NST175_Init()` call.
  * @note One-shot timeout will be forced inside to `100ms` if has not been set yet
  */
-nst175_status_t NST175_Init(nst175_t *dev, uint8_t address);
+nst175_status_t NST175_Init(nst175_t *dev, uint8_t address, bool reset);
 
 /**
  * @brief Read active low-power shutdown mode setting

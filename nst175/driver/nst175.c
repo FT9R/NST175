@@ -71,7 +71,7 @@ typedef enum configMask_e {
     CONFIG_MASK_SHUTDOWN = 0b00000001
 } configMask_t;
 
-nst175_status_t NST175_Init(nst175_t *dev, uint8_t address)
+nst175_status_t NST175_Init(nst175_t *dev, uint8_t address, bool reset)
 {
     uint8_t id;
     uint8_t config;
@@ -84,7 +84,7 @@ nst175_status_t NST175_Init(nst175_t *dev, uint8_t address)
     if (dev->interface.read == NULL || dev->interface.write == NULL || dev->interface.delay == NULL)
         ERROR_SET(NST175_STAT_PLATFORM_NF);
 
-    /* Device ID check */
+    /* Check device ID */
     dev->cache.address = address;
     while (true) {
         dev->interface.delay(100);
@@ -95,6 +95,13 @@ nst175_status_t NST175_Init(nst175_t *dev, uint8_t address)
 
         if (++responseAttempt >= 5)
             ERROR_SET(NST175_STAT_ID_NS);
+    }
+
+    /* Reset internal registers to defaults if requested */
+    if (reset) {
+        WRITE_REG(REG_CONFIGURATION, 0x00, 1);
+        WRITE_REG(REG_TLOW, 0x4B00, 2);
+        WRITE_REG(REG_THIGH, 0x5000, 2);
     }
 
     /* Update cache */
