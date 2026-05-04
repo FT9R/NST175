@@ -16,32 +16,23 @@ Provides initialization, configuration and measurement functions using an abstra
 
 ```C
 void *handle; // Optional handle for I2C interface
+void (*print)(const char *const fmt, ...); // Optional debug print
 bool (*read)(void *handle, uint16_t address, uint16_t reg, uint8_t *data, uint16_t size, uint32_t timeout);
 bool (*write)(void *handle, uint16_t address, uint16_t reg, uint8_t *data, uint16_t size, uint32_t timeout);
 void (*delay)(uint32_t ms);
-void (*print)(const char *const fmt, ...); // Optional debug print
 ```
 
-- Common device setup
+- Minimal device setup
 ```C
 void NST175_SetUp(nst175_t *dev)
 {
-    i2c1_Init(&i2c1Handle, 100000);
+    i2c1_Init(&i2c1Handle, 400000);
 
     memset(dev, 0, sizeof(*dev));
-    dev->interface.handle = &hi2c1;
     dev->interface.read = NST175_Read;
     dev->interface.write = NST175_Write;
     dev->interface.delay = NST175_Delay;
-    dev->interface.print = NST175_Print;
-    if (NST175_Init(dev, 0b1001111, true) != NST175_STAT_OK)
-        Error_Handler();
-
-    /* Overwrite defaults if needed */
-    NST175_ResolutionSet(dev, 12); // Default 9-bit
-    NST175_FaultQueueSet(dev, 6); // Default 1 fault to trigger alarm
-    NST175_LimitSet(dev, NST175_LIMIT_LOW, 50.0f); // Default 75°C
-    NST175_LimitSet(dev, NST175_LIMIT_HIGH, 63.1875f); // Default 80°C
+    NST175_Init(dev, 0x4F, false);
 }
 ```
 
