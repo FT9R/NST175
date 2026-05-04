@@ -54,14 +54,14 @@
 osThreadId_t i2cTaskHandle;
 const osThreadAttr_t i2cTask_attributes = {
     .name = "i2cTask",
-    .stack_size = 128 * 4,
+    .stack_size = 256 * 4,
     .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for ledTask */
 osThreadId_t ledTaskHandle;
 const osThreadAttr_t ledTask_attributes = {
     .name = "ledTask",
-    .stack_size = 128 * 4,
+    .stack_size = 256 * 4,
     .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for tempQueue */
@@ -137,6 +137,7 @@ void I2C_Task(void *argument)
     /* USER CODE BEGIN I2C_Task */
     static nst175_t tempSensor;
     static float tempFiltered;
+    static uint32_t stackFree;
     float temp = 0;
     const float alphaTemp = 0.05;
     char plotString[50] = {0};
@@ -144,6 +145,9 @@ void I2C_Task(void *argument)
     NST175_SetUp(&tempSensor);
     /* Infinite loop */
     for (;;) {
+        stackFree = osThreadGetStackSpace(osThreadGetId());
+        UNUSED(stackFree);
+
         NST175_TemperatureGet(&tempSensor, &temp, 0);
         tempFiltered = alphaTemp * temp + (1 - alphaTemp) * tempFiltered;
         osMessageQueuePut(tempQueueHandle, &tempFiltered, 0, 0);

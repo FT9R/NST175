@@ -25,15 +25,16 @@ typedef struct nst175_s {
     /* Platform related */
     struct {
         void *handle; // Optional handle for I2C interface
+        void (*print)(const char *const fmt, ...); // Optional debug print
         bool (*read)(void *handle, uint16_t address, uint16_t reg, uint8_t *data, uint16_t size, uint32_t timeout);
         bool (*write)(void *handle, uint16_t address, uint16_t reg, uint8_t *data, uint16_t size, uint32_t timeout);
         void (*delay)(uint32_t ms);
-        void (*print)(const char *const fmt, ...); // Optional debug print
     } interface;
 
     /* Per-device driver internals - do not modify */
     struct {
-        uint32_t identity; // Device handle identity, used by driver to check if `nst175_t` structure can be safely used
+        uint32_t identity; // Device handle identity to check if `nst175_t` structure can be safely used
+        nst175_status_t error; // Last detected driver error
         float lsb; // LSB weight for temperature calculation
         uint8_t address; // Device I2C slave address
         uint8_t resolution; // Resolution value (9-12)

@@ -15,27 +15,18 @@
     }                                                              \
     while (0)
 
-#define READ_REG(REG, DATA, SIZE)                                                                                \
-    do {                                                                                                         \
-        if (!dev->interface.read(dev->interface.handle, dev->cache.address, (uint8_t) (REG), (uint8_t *) (DATA), \
-                                 (uint8_t) (SIZE), I2C_READ_TIMEOUT))                                            \
-            ERROR_SET(NST175_STAT_I2C_FAIL);                                                                     \
-    }                                                                                                            \
+#define READ_REG(REG, DATA, SIZE)                  \
+    do {                                           \
+        if (!read_reg(dev, (REG), (DATA), (SIZE))) \
+            ERROR_SET(NST175_STAT_I2C_FAIL);       \
+    }                                              \
     while (0)
 
-#define WRITE_REG(REG, DATA, SIZE)                                                                                    \
-    do {                                                                                                              \
-        uint8_t _writeBuf[4];                                                                                         \
-        uint8_t _size = (uint8_t) (SIZE);                                                                             \
-        uint32_t _data = (uint32_t) (DATA);                                                                           \
-        _writeBuf[0] = (uint8_t) (_data >> 24);                                                                       \
-        _writeBuf[1] = (uint8_t) (_data >> 16);                                                                       \
-        _writeBuf[2] = (uint8_t) (_data >> 8);                                                                        \
-        _writeBuf[3] = (uint8_t) (_data);                                                                             \
-        if (!dev->interface.write(dev->interface.handle, dev->cache.address, (uint8_t) (REG), &_writeBuf[4u - _size], \
-                                  _size, I2C_WRITE_TIMEOUT))                                                          \
-            ERROR_SET(NST175_STAT_I2C_FAIL);                                                                          \
-    }                                                                                                                 \
+#define WRITE_REG(REG, DATA, SIZE)                  \
+    do {                                            \
+        if (!write_reg(dev, (REG), (DATA), (SIZE))) \
+            ERROR_SET(NST175_STAT_I2C_FAIL);        \
+    }                                               \
     while (0)
 
 #define PRINT(...)                             \
@@ -45,12 +36,12 @@
     }                                          \
     while (0)
 
-#define ERROR_SET(ERR)                                        \
-    do {                                                      \
-        nst175_status_t _err = (ERR);                         \
-        PRINT("Error %u occurred in %s()\n", _err, __func__); \
-        return _err;                                          \
-    }                                                         \
+#define ERROR_SET(ERR)                                                    \
+    do {                                                                  \
+        dev->cache.error = (ERR);                                         \
+        PRINT("Error %u occurred in %s()\n", dev->cache.error, __func__); \
+        return dev->cache.error;                                          \
+    }                                                                     \
     while (0)
 
 /* Custom types */
@@ -70,6 +61,45 @@ typedef enum configMask_e {
     CONFIG_MASK_MODE = 0b00000010,
     CONFIG_MASK_SHUTDOWN = 0b00000001
 } configMask_t;
+
+static inline bool read_reg(nst175_t *dev, uint16_t reg, void *data, uint8_t size)
+{
+    uint8_t buf[4] = {0};
+    uint32_t result = 0;
+    if (size == 0 || size > 4)
+        return false;
+
+    if (!dev->interface.read(dev->interface.handle, dev->cache.address, reg, buf, size, I2C_READ_TIMEOUT))
+        return false;
+    for (uint8_t i = 0; i < size; i++)
+        result = (result << 8) | buf[i];
+    switch (size) {
+    case 1:
+        *(uint8_t *) data = (uint8_t) result;
+        break;
+    case 2:
+        *(uint16_t *) data = (uint16_t) result;
+        break;
+    case 4:
+        *(uint32_t *) data = (uint32_t) result;
+        break;
+    }
+    return true;
+}
+
+static inline bool write_reg(nst175_t *dev, uint16_t reg, uint32_t data, uint8_t size)
+{
+    uint8_t buf[4];
+    if (size == 0 || size > 4)
+        return false;
+
+    buf[0] = (uint8_t) (data >> 24);
+    buf[1] = (uint8_t) (data >> 16);
+    buf[2] = (uint8_t) (data >> 8);
+    buf[3] = (uint8_t) (data >> 0);
+    return dev->interface.write(dev->interface.handle, dev->cache.address, reg, &buf[4u - size], size,
+                                I2C_WRITE_TIMEOUT);
+}
 
 nst175_status_t NST175_Init(nst175_t *dev, uint8_t address, bool reset)
 {
@@ -173,7 +203,6 @@ nst175_status_t NST175_ResolutionSet(nst175_t *dev, uint8_t resolution)
 
 nst175_status_t NST175_LimitGet(nst175_t *dev, nst175_limit_t limitType, float *limit)
 {
-    uint8_t buf[2];
     int16_t raw;
     regAddr_t reg;
     HANDLE_CHECK;
@@ -193,10 +222,7 @@ nst175_status_t NST175_LimitGet(nst175_t *dev, nst175_limit_t limitType, float *
     }
 
     /* Read 12-bit temperature limit register */
-    READ_REG(reg, buf, sizeof(buf));
-
-    /* Assemble MSB-first */
-    raw = (int16_t) (((uint16_t) buf[0] << 8) | buf[1]);
+    READ_REG(reg, &raw, 2);
 
     /* Shift right to remove unused bits */
     raw >>= (16 - 12);
@@ -332,7 +358,6 @@ nst175_status_t NST175_PolaritySet(nst175_t *dev, nst175_alarm_polarity_t polari
 nst175_status_t NST175_TemperatureGet(nst175_t *dev, float *temperature, uint32_t timeout)
 {
     uint8_t config;
-    uint8_t buf[2];
     int16_t raw;
     const uint8_t pollPeriod = 1;
     HANDLE_CHECK;
@@ -365,10 +390,7 @@ nst175_status_t NST175_TemperatureGet(nst175_t *dev, float *temperature, uint32_
     }
 
     /* Read 12-bit temperature register */
-    READ_REG(REG_TEMPERATURE, buf, sizeof(buf));
-
-    /* Assemble MSB-first */
-    raw = (int16_t) (((uint16_t) buf[0] << 8) | buf[1]);
+    READ_REG(REG_TEMPERATURE, &raw, 2);
 
     /* Shift right to remove unused bits */
     raw >>= (16 - dev->cache.resolution);
